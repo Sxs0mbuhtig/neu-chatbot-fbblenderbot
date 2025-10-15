@@ -79,7 +79,7 @@ def chatbot_interface(input_text, history):
             outputs = model.generate(
                 **inputs,
                 max_length=50,
-                pad_token_id=tokenizer.pad_token_id if tokenizer.pad_token_id is not None else tokenizer.eos_token_id, 
+                pad_token_id=tokenizer.pad_token_id,
                 num_beams=4,  # Increased beams for quality
                 early_stopping=True
             )
