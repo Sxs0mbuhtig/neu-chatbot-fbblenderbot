@@ -6,7 +6,7 @@ import numpy
 import sentencepiece
 
 # --- Configuration ---
-MODEL_NAME = "facebook/blenderbot-1B-distill"
+MODEL_NAME = model_name = "facebook/blenderbot-90M" # Upgrade to:"facebook/blenderbot-1B-distill"
 MAX_HISTORY_LENGTH = 10 
 
 st.set_page_config(
