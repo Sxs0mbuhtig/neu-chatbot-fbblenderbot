@@ -1,28 +1,14 @@
 # app.py - Optimized for Streamlit Community Cloud
 import streamlit as st
 import torch
+import torch.nn as nn # <-- ADDED: Needed for nn.Linear and nn.Embedding
+from torch.ao.quantization import default_dynamic_qconfig, float_qparams_weight_only_qconfig # <-- ADDED: Needed for quantization fix
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
 import numpy
 import sentencepiece
 
-# Use st.cache_resource for large, immutable objects like ML models
-# This keeps the model in memory across user sessions/reruns.
-@st.cache_resource
-def get_model():
-    # Use the model you want to deploy
-    model_name = "facebook/blenderbot-1B-distill" 
-    
-    # 1. Load the tokenizer and model
-    tokenizer = AutoTokenizer.from_pretrained(model_name)
-    model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
-    
-    return tokenizer, model
-
-# Call the function once at the start
-tokenizer, model = get_model()
-
 # --- Configuration ---
-MODEL_NAME = model_name = "facebook/blenderbot-90M" # Upgrade: "facebook/blenderbot-1B-distill"
+MODEL_NAME = "facebook/blenderbot-90M" # Use a smaller model for faster loading and less memory strain
 MAX_HISTORY_LENGTH = 10 
 
 st.set_page_config(
@@ -31,12 +17,11 @@ st.set_page_config(
 )
 
 # --- CACHING: Model Loading & Quantization (Runs only once) ---
-# st.cache_resource is essential for large, immutable objects like models
 @st.cache_resource
 def initialize_quantized_model(model_name: str):
     """Loads and quantizes the Blenderbot model on first run."""
     try:
-        # Streamlit defaults to CPU, no need to specify device unless using GPU
+        # Streamlit defaults to CPU
         device = torch.device("cpu")
         
         # 1. Load Tokenizer and Model
@@ -44,27 +29,37 @@ def initialize_quantized_model(model_name: str):
         model = AutoModelForSeq2SeqLM.from_pretrained(model_name).to(device)
         
         # 2. Dynamic Quantization (INT8) for CPU performance
-        # This converts floating-point weights to 8-bit integers.
+        
+        # Define the custom qconfig map to resolve the Embedding error:
+        # "Embedding quantization is only supported with float_qparams_weight_only_qconfig"
+        qconfig_dict = {
+            nn.Embedding: float_qparams_weight_only_qconfig,
+            nn.Linear: default_dynamic_qconfig
+        }
+        
+        # Apply quantization using the corrected config
         quantized_model = torch.quantization.quantize_dynamic(
-            model, {torch.nn.Linear, torch.nn.Embedding}, dtype=torch.qint8
+            model, qconfig_dict, dtype=torch.qint8 # <-- FIXED: Passing the required qconfig_dict
         )
         st.success("Model loaded and quantized successfully!", icon="✅")
         return tokenizer, quantized_model, device
     except Exception as e:
+        # Using st.exception gives a better traceback in the Streamlit UI
         st.error(f"🛑 Error loading model: {e}")
+        st.exception(e)
         st.stop() # Stops the app if model loading fails
 
 # Global variables for the model
+# NOTE: Removed the redundant 'get_model()' call which was causing conflicts.
 tokenizer, model, device = initialize_quantized_model(MODEL_NAME)
 
 
 # --- Initialization: Streamlit Session State ---
-# This ensures chat history and message keys persist across interactions
 if "messages" not in st.session_state:
-    st.session_state.messages = [] # Format: [{"role": "user", "content": "..."}]
+    st.session_state.messages = [] 
 
 if "history_list" not in st.session_state:
-    st.session_state.history_list = [] # Format: Flattened list of prior messages for the model
+    st.session_state.history_list = [] 
 
 
 # --- Core Chatbot Generation Function ---
@@ -72,23 +67,19 @@ def generate_response(input_text):
     """Handles history, generation, and updates session state."""
     
     # 1. Format Conversation History for the Model
-    # Append the new user input to the model's history list
     st.session_state.history_list.append(input_text)
     
-    # Limit conversation length to prevent hitting token limits
     limited_conversation = st.session_state.history_list[-MAX_HISTORY_LENGTH:]
 
     # 2. Model Generation
     try:
         with torch.no_grad():
-            # Use prepare_seq2seq_batch for proper dialogue formatting
             inputs = tokenizer.prepare_seq2seq_batch(
                 limited_conversation, 
                 return_tensors="pt",
                 truncation=True
             ).to(device)
 
-            # Use simple pad_token_id definition (Fix for a common error)
             outputs = model.generate(
                 **inputs,
                 max_length=50,
@@ -109,8 +100,8 @@ def generate_response(input_text):
         return f"Sorry, I ran into a system error. ({e.__class__.__name__})"
 
 # --- Streamlit Interface Setup ---
-st.title("Optimized Blenderbot 1B Chatbot (Streamlit CPU)")
-st.caption("Running the larger 1B model with Dynamic Quantization and Beam Search.")
+st.title("Optimized Blenderbot Chatbot (Streamlit CPU)")
+st.caption("Running the 90M model with Dynamic Quantization and Beam Search.")
 
 # Display previous messages
 for message in st.session_state.messages:

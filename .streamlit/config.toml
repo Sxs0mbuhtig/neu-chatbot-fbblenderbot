@@ -1,0 +1,4 @@
+[client]
+# This setting prevents Streamlit from watching files in common dependency folders.
+# This should resolve the 'inotify watch limit reached' error.
+fileWatcherType = "poll"
