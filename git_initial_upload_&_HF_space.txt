@@ -1,0 +1,35 @@
+# 1. Add the files to the staging area
+# This tells Git you want to include these files in the next commit.
+git add .
+
+# You can run 'git status' again to see they are now staged.
+
+# 2. Commit the files
+# This records the staged changes (files) in your local history,
+# creating the very first commit on the 'main' branch.
+git commit -m "Initial commit of project files"
+
+# 3. Push the commit to the remote repository
+# Now that 'main' has a commit, Git can successfully push it to GitHub.
+git push -u origin main
+
+# Run this command in your terminal
+pip install huggingface_hub
+huggingface-cli login
+
+# Add the remote. Example URL structure: https://huggingface.co/spaces/user/space-name
+git remote add hf HF_SPACE_GIT_URL
+
+# Push the local 'main' branch to the 'hf' remote
+git push hf main
+
+# if need to rm caches
+git rm --cached neu-chatbot-fbblenderbot
+
+# Command to delete the .git folder within the subfolder (on Windows)
+# Be careful with this command! Ensure you are targeting the subfolder.
+rmdir /s /q neu-chatbot-fbblenderbot\.git
+
+git add neu-chatbot-fbblenderbot/
+git commit -m "Fixed embedded repo issue and added content"
+git push origin main
